@@ -1,0 +1,51 @@
+{
+  "author": "Sorin Gherghisan",
+  "name": "IMDbSeenList",
+  "version": "0.1.0",
+  "description": "A browser extension for IMDb.com that provides a 'Seen List' functionality, similar to IMDb's native Watchlist.",
+  "homepage_url": "https://github.com/soringherghisan/IMDbSeenList",
+  "manifest_version": 2,
+  "permissions": [
+    "cookies",
+    "storage",
+    "*://*.imdb.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.imdb.com/*"
+      ],
+      "js": [
+        "content_scripts/graphql_queries.js",
+        "content_scripts/content.js"
+      ],
+      "css": [
+        "css/content_styles.css"
+      ]
+    },
+    {
+      "matches": [
+        "*://*.imdb.com/user/*/lists/*"
+      ],
+      "js": [
+        "content_scripts/lists_page_handler.js"
+      ],
+      "css": [
+        "css/lists_page_styles.css"
+      ]
+    }
+  ],
+  "background": {
+    "scripts": [
+      "background/background.js"
+    ]
+  },
+  "browser_action": {
+    "default_icon": "icons/Seenlist-48.png",
+    "default_popup": "popup/popup.html"
+  },
+  "icons": {
+    "48": "icons/Seenlist-48.png",
+    "96": "icons/Seenlist-96.png"
+  }
+}

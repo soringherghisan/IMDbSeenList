@@ -1,0 +1,155 @@
+.seen-ribbon {
+    position: absolute !important;
+    top: 0;
+    right: 0;
+    /* Default width/height removed, now controlled by size classes */
+    cursor: pointer;
+    z-index: 1000;
+    overflow: hidden; /* Ensures SVG parts don't stick out */
+}
+
+.seen-ribbon__bg { /* Container for ribbon SVG polygons */
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100%; /* Fill the .seen-ribbon container */
+    height: 100%; /* Fill the .seen-ribbon container */
+    pointer-events: none;
+}
+
+.seen-ribbon__bg-shadow {
+    fill: rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+}
+
+.seen-ribbon__bg-ribbon { /* Main color part of the ribbon */
+    transition: fill 0.2s ease-in-out, opacity 0.2s ease-in-out;
+    pointer-events: none;
+}
+
+.seen-ribbon__bg-hover { /* Polygon for hover effect on ribbon */
+    fill: rgba(255, 255, 255, 0);
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out, fill 0.2s ease-in-out;
+    pointer-events: none;
+}
+
+.seen-ribbon__icon { /* Container for the eye icon SVG */
+    position: absolute;
+    top: 42%; /* Position relative to ribbon height */
+    left: 50%;
+    transform: translate(-50%, -50%);
+    /* Default width/height removed, now controlled by size classes */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.seen-ribbon__icon svg { /* The eye icon SVG element itself */
+    width: 100%; /* Fill the .seen-ribbon__icon container */
+    height: 100%; /* Fill the .seen-ribbon__icon container */
+    display: block;
+}
+
+/* === BASE ICON STYLING (Targeting <path> and <circle> inside the eye SVG) === */
+/* Common transition, specific stroke-width will be per size class */
+.seen-ribbon__icon svg path,
+.seen-ribbon__icon svg circle {
+    transition: stroke 0.2s ease-in-out, fill 0.2s ease-in-out;
+}
+
+/* === TIERED SIZING RULES === */
+/* Compact Size */
+.seen-ribbon--size-compact {
+    width: 30px;
+    height: 40px;
+}
+
+.seen-ribbon--size-compact .seen-ribbon__icon {
+    width: 14px;
+    height: 14px;
+}
+
+.seen-ribbon--size-compact .seen-ribbon__icon svg path,
+.seen-ribbon--size-compact .seen-ribbon__icon svg circle {
+    stroke-width: 1.2px !important;
+}
+
+/* Medium Size (Original Default) */
+.seen-ribbon--size-medium {
+    width: 40px;
+    height: 54px;
+}
+
+.seen-ribbon--size-medium .seen-ribbon__icon {
+    width: 18px;
+    height: 18px;
+}
+
+.seen-ribbon--size-medium .seen-ribbon__icon svg path,
+.seen-ribbon--size-medium .seen-ribbon__icon svg circle {
+    stroke-width: 1.5px !important;
+}
+
+/* Large Size */
+.seen-ribbon--size-large {
+    width: 50px;
+    height: 67px;
+}
+
+.seen-ribbon--size-large .seen-ribbon__icon {
+    width: 22px;
+    height: 22px;
+}
+
+.seen-ribbon--size-large .seen-ribbon__icon svg path,
+.seen-ribbon--size-large .seen-ribbon__icon svg circle {
+    stroke-width: 1.8px !important;
+}
+
+/* === COLOR STATES (Unseen Movie) === */
+.seen-ribbon .seen-ribbon__bg-ribbon {
+    fill: #000000 !important;
+    opacity: 0.6 !important;
+}
+
+.seen-ribbon .seen-ribbon__icon svg path,
+.seen-ribbon .seen-ribbon__icon svg circle {
+    fill: none !important;
+    stroke: #ffffff !important;
+}
+
+/* HOVER on DEFAULT STATE (Unseen Movie) */
+.seen-ribbon:not(.is-seen):hover .seen-ribbon__bg-hover {
+    fill: rgba(255, 255, 255, 1) !important;
+    opacity: 0.2 !important;
+}
+
+.seen-ribbon:not(.is-seen):hover .seen-ribbon__icon svg path,
+.seen-ribbon:not(.is-seen):hover .seen-ribbon__icon svg circle {
+    stroke: #e0e0e0 !important;
+}
+
+/* === SEEN STATE (.is-seen class applied) === */
+.seen-ribbon.is-seen .seen-ribbon__bg-ribbon {
+    fill: #F5C518 !important;
+    opacity: 1 !important;
+}
+
+.seen-ribbon.is-seen .seen-ribbon__icon svg path,
+.seen-ribbon.is-seen .seen-ribbon__icon svg circle {
+    fill: none !important;
+    stroke: #000000 !important;
+}
+
+/* HOVER on SEEN STATE */
+.seen-ribbon.is-seen:hover .seen-ribbon__bg-hover {
+    fill: rgba(0, 0, 0, 0.15) !important;
+    opacity: 1 !important;
+}
+
+.seen-ribbon.is-seen:hover .seen-ribbon__icon svg path,
+.seen-ribbon.is-seen:hover .seen-ribbon__icon svg circle {
+    stroke: #333333 !important;
+}

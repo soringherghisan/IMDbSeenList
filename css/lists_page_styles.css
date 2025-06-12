@@ -1,0 +1,47 @@
+/* lists_page_styles.css */
+
+.seenlist-button {
+    background-color: #007bff; /* A distinct blue */
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    margin-left: 10px; /* Spacing from the list name/details */
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s ease-in-out;
+    white-space: nowrap; /* Prevent text wrapping */
+
+    /* Explicitly control display and width */
+    display: inline-block; /* Behaves like inline but respects width/height */
+    width: fit-content; /* Makes the button only as wide as its content */
+    /* vertical-align: middle; /* Might be useful depending on line-height of title */
+}
+
+.seenlist-button:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+}
+
+.seenlist-button-active {
+    background-color: #28a745; /* Green for active */
+    color: white;
+    cursor: default; /* Not clickable if already active */
+}
+
+.seenlist-button-active:hover {
+    background-color: #218838; /* Slightly darker green on hover, but still distinct */
+}
+
+.seenlist-button-disabled {
+    background-color: #6c757d; /* Grey for disabled */
+    color: #ccc;
+    cursor: not-allowed;
+}
+
+/* New styles for the <a> tag (list title link) */
+a.ipc-metadata-list-summary-item__t {
+    display: flex;                 /* Turns the link into a flex container */
+    justify-content: space-between;/* Pushes title text to the left and button to the right */
+    align-items: center;           /* Vertically aligns the title text and button */
+    width: 100%;                   /* Ensures the link takes up full available width in its parent div */
+}
