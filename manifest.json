@@ -7,7 +7,10 @@
   "manifest_version": 2,
   "browser_specific_settings": {
     "gecko": {
-      "id": "{41919bde-bc94-4837-b378-8be18357d30c}"
+      "id": "{41919bde-bc94-4837-b378-8be18357d30c}",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   },
   "permissions": [
