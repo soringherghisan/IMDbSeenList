@@ -18,13 +18,19 @@ document.addEventListener("DOMContentLoaded", () => {
             userInfoSpan.textContent = userId;
             userInfoSpan.className = "status-success";
             if (userInfoLine) userInfoLine.style.display = "block"; // Show user ID line
+        } else if (isLoggedIn) {
+            // Logged in, but the user ID couldn't be determined (IMDb may have changed its cookies/page data)
+            loginStatusSpan.textContent = "Logged in, but user ID not found ⚠️";
+            loginStatusSpan.className = "status-error";
+            userInfoSpan.textContent = "N/A";
+            userInfoSpan.className = "status-error";
+            if (userInfoLine) userInfoLine.style.display = "block";
         } else {
             loginStatusSpan.textContent = "Not logged in ❌";
             loginStatusSpan.className = "status-error";
             userInfoSpan.textContent = "N/A";
             userInfoSpan.className = "status-error";
-            // Hide or show N/A for user ID line based on preference
-            if (userInfoLine) userInfoLine.style.display = isLoggedIn ? "block" : "none";
+            if (userInfoLine) userInfoLine.style.display = "none";
         }
     }
 

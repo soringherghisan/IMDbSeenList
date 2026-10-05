@@ -5,8 +5,15 @@ let isUserLoggedIn = false;
 let currentUserId = null;
 let currentUserListId = null;
 
-const IMDB_COOKIE_URL = "https://www.imdb.com";
+// Login state as reported by IMDb's own page data (see readPageAccountState in content.js).
+// Used as a fallback when the cookies alone can't tell us who is logged in.
+let pageAccountState = null;
+
 const IMDB_DOMAIN = "imdb.com";
+// Any of these cookies indicates a signed-in IMDb (Amazon) session.
+const AUTH_COOKIE_NAMES = ["x-main", "at-main", "sess-at-main"];
+const USER_COOKIE_NAME = "uu";
+const USER_ID_PATTERN = /^ur\d+$/;
 
 // Initialize state when the background script starts
 // Store the promise for later use, ensuring we wait for full initialization.
@@ -18,40 +25,95 @@ const initialisationPromise = updateUserStateAndNotify("background_script_startu
     });
 
 
+// --- Cookie Helpers ---
+async function getImdbCookies() {
+    try {
+        // partitionKey: {} also returns partitioned cookies; firstPartyDomain: null keeps the
+        // query working when first-party isolation is enabled.
+        const cookies = await browser.cookies.getAll({domain: IMDB_DOMAIN, partitionKey: {}, firstPartyDomain: null});
+        // Ignore cookies partitioned under other sites (e.g. IMDb embeds), they don't reflect the imdb.com session.
+        return cookies.filter(cookie => !cookie.partitionKey || !cookie.partitionKey.topLevelSite ||
+            cookie.partitionKey.topLevelSite.endsWith(IMDB_DOMAIN));
+    } catch (error) {
+        console.warn("Background: Extended cookie query failed, retrying with a basic one:", error.message);
+        return await browser.cookies.getAll({domain: IMDB_DOMAIN});
+    }
+}
+
+// Recursively looks for a user ID string (e.g. "ur12345678") inside a parsed object.
+function findUserIdInObject(value, depth = 0) {
+    if (typeof value === "string") return USER_ID_PATTERN.test(value) ? value : null;
+    if (!value || typeof value !== "object" || depth > 4) return null;
+    for (const child of Object.values(value)) {
+        const found = findUserIdInObject(child, depth + 1);
+        if (found) return found;
+    }
+    return null;
+}
+
+// The 'uu' cookie has historically been base64-encoded JSON holding the user ID in 'uc'.
+// Parse it leniently so small format changes (quoting, URL-encoding, base64url, renamed keys) don't break us.
+function parseUserIdFromUuCookie(rawValue) {
+    let value = rawValue.replace(/^"|"$/g, "");
+    try {
+        value = decodeURIComponent(value);
+    } catch (error) { /* not URL-encoded */ }
+
+    let decoded = value;
+    try {
+        const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+        decoded = atob(base64 + "=".repeat((4 - base64.length % 4) % 4));
+    } catch (error) { /* not base64, search the value as-is */ }
+
+    try {
+        const userData = JSON.parse(decoded);
+        if (userData && typeof userData.uc === "string" && USER_ID_PATTERN.test(userData.uc)) return userData.uc;
+        const found = findUserIdInObject(userData);
+        if (found) return found;
+    } catch (error) { /* not JSON */ }
+
+    const match = decoded.match(/ur\d{4,}/);
+    return match ? match[0] : null;
+}
+
+
 // --- Core State Update Function ---
 async function updateUserStateAndNotify(reason = "Unknown") {
     const previousLoginState = isUserLoggedIn;
     const previousUserId = currentUserId;
     const previousListId = currentUserListId;
 
-    let newLoginState = false;
-    let newUserId = null;
+    let cookieLoginState = false;
+    let cookieUserId = null;
+    let cookieNames = [];
     let newRawListId = null;
 
     try {
-        const xMainCookie = await browser.cookies.get({url: IMDB_COOKIE_URL, name: "x-main"});
-        if (xMainCookie && xMainCookie.value) {
-            newLoginState = true;
-            const uuCookie = await browser.cookies.get({url: IMDB_COOKIE_URL, name: "uu"});
-            if (uuCookie && uuCookie.value) {
-                try {
-                    const decodedValue = atob(uuCookie.value);
-                    const userData = JSON.parse(decodedValue);
-                    newUserId = userData.uc || null;
-                } catch (error) {
-                    console.error("Background: Error parsing 'uu' cookie:", error);
-                    newUserId = null;
-                }
-            }
+        const cookies = await getImdbCookies();
+        cookieNames = [...new Set(cookies.map(cookie => cookie.name))];
+        const findCookie = name => cookies.find(cookie => cookie.name === name && cookie.value);
+
+        cookieLoginState = AUTH_COOKIE_NAMES.some(findCookie);
+        const uuCookie = findCookie(USER_COOKIE_NAME);
+        if (uuCookie) {
+            cookieUserId = parseUserIdFromUuCookie(uuCookie.value);
         }
     } catch (error) {
         console.error("Background: Error checking cookies:", error);
-        newLoginState = previousLoginState;
-        newUserId = previousUserId;
+        cookieLoginState = previousLoginState;
+        cookieUserId = previousUserId;
     }
 
-    isUserLoggedIn = newLoginState;
-    currentUserId = newUserId;
+    // Logged in if either the cookies or IMDb's page data say so. Prefer the cookie user ID, fall back to the page's.
+    const pageSaysLoggedIn = !!(pageAccountState && pageAccountState.isLoggedIn);
+    isUserLoggedIn = cookieLoginState || pageSaysLoggedIn;
+    currentUserId = isUserLoggedIn ? (cookieUserId || (pageAccountState && pageAccountState.userId) || null) : null;
+
+    // Cookie names only (never values), to help diagnose future IMDb changes.
+    if ((pageAccountState && pageSaysLoggedIn !== cookieLoginState) || (isUserLoggedIn && !currentUserId)) {
+        console.warn(`Background (${reason}): Login detection is incomplete or inconsistent, IMDb may have changed its cookies.`,
+            {cookieLoginState, cookieUserId, pageAccountState, imdbCookieNames: cookieNames});
+    }
 
     if (isUserLoggedIn && currentUserId) {
         const storageKey = `userListId_${currentUserId}`;
@@ -112,8 +174,13 @@ function notifyOtherPartsOfExtension() {
 
 // --- Event Listeners ---
 browser.cookies.onChanged.addListener(async (changeInfo) => {
-    if (changeInfo.cookie.domain.includes(IMDB_DOMAIN) && (changeInfo.cookie.name === "x-main" || changeInfo.cookie.name === "uu")) {
-        let reason = `Cookie '${changeInfo.cookie.name}' ${changeInfo.removed ? 'removed' : 'changed/added'}`;
+    const cookieName = changeInfo.cookie.name;
+    const isAuthCookie = AUTH_COOKIE_NAMES.includes(cookieName);
+    if (changeInfo.cookie.domain.includes(IMDB_DOMAIN) && (isAuthCookie || cookieName === USER_COOKIE_NAME)) {
+        if (isAuthCookie && changeInfo.removed && changeInfo.cause !== "overwrite") {
+            pageAccountState = null; // Signed out, the last page-reported state is stale
+        }
+        let reason = `Cookie '${cookieName}' ${changeInfo.removed ? 'removed' : 'changed/added'}`;
         await updateUserStateAndNotify(reason);
     }
 });
@@ -149,6 +216,22 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     error: "Failed to get initial status due to background error."
                 });
             }
+        })();
+        return true; // Required for async sendResponse
+    } else if (message.action === "reportPageAccountState") {
+        (async () => {
+            const data = message.data || {};
+            if (typeof data.isLoggedIn !== "boolean") {
+                sendResponse({success: false, error: "Invalid page account state."});
+                return;
+            }
+            await initialisationPromise;
+            pageAccountState = {
+                isLoggedIn: data.isLoggedIn,
+                userId: data.isLoggedIn && typeof data.userId === "string" && USER_ID_PATTERN.test(data.userId) ? data.userId : null
+            };
+            await updateUserStateAndNotify(`page account state reported by tab ${sender.tab ? sender.tab.id : 'N/A'}`);
+            sendResponse({success: true});
         })();
         return true; // Required for async sendResponse
     } else if (message.action === "setListId") {

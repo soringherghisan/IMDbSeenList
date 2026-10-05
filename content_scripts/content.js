@@ -12,6 +12,8 @@ const RIBBON_SIZE_BREAKPOINTS = {
     COMPACT_MAX_WIDTH: 119,
     MEDIUM_MAX_WIDTH: 219
 };
+
+const USER_ID_PATTERN = /^ur\d+$/;
 // --- END CONFIGURATION & CONSTANTS ---
 
 let isUserLoggedIn = false;
@@ -43,6 +45,45 @@ function extractMovieIdFromElement(element) {
         }
     }
     return null;
+}
+
+// Recursively looks for a user ID string (e.g. "ur12345678") inside a parsed object.
+function findUserIdInObject(value, depth = 0) {
+    if (typeof value === "string") return USER_ID_PATTERN.test(value) ? value : null;
+    if (!value || typeof value !== "object" || depth > 4) return null;
+    for (const child of Object.values(value)) {
+        const found = findUserIdInObject(child, depth + 1);
+        if (found) return found;
+    }
+    return null;
+}
+
+// Looks for a link to the user's own profile in IMDb's top navigation bar.
+function findUserIdInHeader() {
+    const profileLink = document.querySelector('#imdbHeader a[href*="/user/ur"]');
+    const match = profileLink && profileLink.getAttribute("href").match(/\/user\/(ur\d+)/);
+    return match ? match[1] : null;
+}
+
+/**
+ * Reads the login state IMDb embeds in its own page data (the Next.js __NEXT_DATA__ script).
+ * background.js uses it as a fallback when IMDb's cookies can't be interpreted.
+ * @returns {{isLoggedIn: boolean, userId: string|null}|null} null when the page doesn't carry this data.
+ */
+function readPageAccountState() {
+    const nextDataElement = document.getElementById("__NEXT_DATA__");
+    if (!nextDataElement) return null;
+    try {
+        const account = JSON.parse(nextDataElement.textContent)?.props?.pageProps?.requestContext?.sidecar?.account;
+        if (!account || typeof account.isLoggedIn !== "boolean") return null;
+        return {
+            isLoggedIn: account.isLoggedIn,
+            userId: account.isLoggedIn ? (findUserIdInObject(account) || findUserIdInHeader()) : null
+        };
+    } catch (error) {
+        debugLog("Could not read account state from __NEXT_DATA__:", error);
+        return null;
+    }
 }
 
 
@@ -635,7 +676,18 @@ browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 async function main() {
     debugLog("Content Script: Main - Starting initialization...");
 
-    // 1. Fetch initial state from background.js
+    // 1. Report IMDb's own login state for this page, so background.js can fall back on it
+    const pageAccountState = readPageAccountState();
+    debugLog("Content Script: Main - Page account state:", pageAccountState);
+    if (pageAccountState) {
+        try {
+            await browser.runtime.sendMessage({action: "reportPageAccountState", data: pageAccountState});
+        } catch (error) {
+            console.error("Content Script: Main - Error reporting page account state to background.js:", error);
+        }
+    }
+
+    // 2. Fetch initial state from background.js
     try {
         const initialState = await browser.runtime.sendMessage({action: "getInitialStatus"});
         if (initialState) {
@@ -659,7 +711,7 @@ async function main() {
 
     debugLog(`Content Script: Main - Initialization state set: LoggedIn=${isUserLoggedIn}, UserID=${currentUserId}, ListID=${currentUserListId}`);
 
-    // 2. Conditional cache update and UI processing
+    // 3. Conditional cache update and UI processing
     if (isUserLoggedIn && currentUserListId) {
         debugLog("Content Script: Main - User is logged in and has a List ID. Updating seen movies cache.");
         await updateSeenMoviesCache();
@@ -669,7 +721,7 @@ async function main() {
         processMovieElements(); // Ensure UI reflects logged-out/no-list state
     }
 
-    // 3. Start the MutationObserver
+    // 4. Start the MutationObserver
     observer.observe(document.body, {
         childList: true,
         subtree: true,
